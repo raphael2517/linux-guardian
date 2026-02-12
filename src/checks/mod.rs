@@ -93,16 +93,26 @@ pub fn check_ssh_root_login() -> CheckResult {
 }
 
 
-pub fn check_ssh_password_auth() -> String {
+pub fn check_ssh_password_auth() -> CheckResult {
     let path = "/etc/ssh/sshd_config";
 
     if !Path::new(path).exists() {
-        return "[!] SSH config not found".to_string();
+        return CheckResult {
+            name: "SSH Password Authentication".to_string(),
+            risk: RiskLevel::High,
+            message: "SSH config not found".to_string(),
+            score_impact: 15,
+        };
     }
 
     let file = File::open(path);
     if file.is_err() {
-        return "[!] Unable to read SSH config (try running with sudo)".to_string();
+        return CheckResult {
+            name: "SSH Password Authentication".to_string(),
+            risk: RiskLevel::High,
+            message: "Cannot read SSH config (run as sudo)".to_string(),
+            score_impact: 15,
+        };
     }
 
     let reader = io::BufReader::new(file.unwrap());
@@ -120,62 +130,86 @@ pub fn check_ssh_password_auth() -> String {
                 if parts.len() >= 2 {
                     match parts[1] {
                         "yes" => {
-                            return "[!] SSH Password Authentication Enabled (MEDIUM RISK)"
-                                .to_string()
+                            return CheckResult {
+                                name: "SSH Password Authentication".to_string(),
+                                risk: RiskLevel::Medium,
+                                message: "Password authentication enabled".to_string(),
+                                score_impact: 10,
+                            }
                         }
                         "no" => {
-                            return "[✓] SSH Password Authentication Disabled (Key-only login)"
-                                .to_string()
+                            return CheckResult {
+                                name: "SSH Password Authentication".to_string(),
+                                risk: RiskLevel::Low,
+                                message: "Password authentication disabled (key-only)".to_string(),
+                                score_impact: 0,
+                            }
                         }
-                        _ => return "[?] Unknown SSH password authentication setting".to_string(),
+                        _ => {}
                     }
                 }
             }
         }
     }
 
-    "[?] PasswordAuthentication not explicitly set".to_string()
+    CheckResult {
+        name: "SSH Password Authentication".to_string(),
+        risk: RiskLevel::Medium,
+        message: "Setting not explicitly defined".to_string(),
+        score_impact: 5,
+    }
 }
 
 
-use std::process::Command;
 
-pub fn check_firewall_status() -> String {
+
+pub fn check_firewall_status() -> CheckResult {
+    use std::process::Command;
+
     // Check UFW
-    let ufw = Command::new("ufw").arg("status").output();
-
-    if let Ok(output) = ufw {
+    if let Ok(output) = Command::new("ufw").arg("status").output() {
         let result = String::from_utf8_lossy(&output.stdout);
         if result.contains("Status: active") {
-            return "[✓] UFW Firewall Active".to_string();
+            return CheckResult {
+                name: "Firewall Status".to_string(),
+                risk: RiskLevel::Low,
+                message: "UFW firewall active".to_string(),
+                score_impact: 0,
+            };
         } else if result.contains("Status: inactive") {
-            return "[!] UFW Installed but Inactive (RISK)".to_string();
+            return CheckResult {
+                name: "Firewall Status".to_string(),
+                risk: RiskLevel::High,
+                message: "UFW installed but inactive".to_string(),
+                score_impact: 20,
+            };
         }
     }
 
     // Check firewalld
-    let firewalld = Command::new("systemctl")
+    if let Ok(output) = Command::new("systemctl")
         .arg("is-active")
         .arg("firewalld")
-        .output();
-
-    if let Ok(output) = firewalld {
-        let result = String::from_utf8_lossy(&output.stdout);
-        if result.contains("active") {
-            return "[✓] firewalld Active".to_string();
+        .output()
+        {
+            let result = String::from_utf8_lossy(&output.stdout);
+            if result.contains("active") {
+                return CheckResult {
+                    name: "Firewall Status".to_string(),
+                    risk: RiskLevel::Low,
+                    message: "firewalld active".to_string(),
+                    score_impact: 0,
+                };
+            }
         }
-    }
 
-    // Fallback check for iptables rules
-    let iptables = Command::new("iptables").arg("-L").output();
-    if let Ok(output) = iptables {
-        if !output.stdout.is_empty() {
-            return "[?] iptables present (manual verification needed)".to_string();
+        // Fallback: no firewall detected
+        CheckResult {
+            name: "Firewall Status".to_string(),
+            risk: RiskLevel::High,
+            message: "No active firewall detected".to_string(),
+            score_impact: 25,
         }
-    }
-
-    "[!] No Active Firewall Detected".to_string()
 }
-
 
 

@@ -10,15 +10,16 @@ fn main() {
     let mut results = Vec::new();
 
     results.push(check_ssh_root_login());
+    results.push(check_ssh_password_auth());
+    results.push(check_firewall_status());
 
     for result in &results {
-        println!("{}: {}", result.name, result.message);
+        println!("{} [{:?}]: {}", result.name, result.risk, result.message);
     }
 
     let score = calculate_score(&results);
-    let grade = grade(score);
+    let final_grade = grade(score);
 
     println!("\nSecurity Score: {}/100", score);
-    println!("Grade: {}", grade);
+    println!("Grade: {}", final_grade);
 }
-
