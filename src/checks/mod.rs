@@ -1,17 +1,42 @@
+#[derive(Debug)]
+pub enum RiskLevel {
+    Low,
+    Medium,
+    High,
+}
+
+pub struct CheckResult {
+    pub name: String,
+    pub risk: RiskLevel,
+    pub message: String,
+    pub score_impact: i32,
+}
+
+
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 
-pub fn check_ssh_root_login() -> String {
+pub fn check_ssh_root_login() -> CheckResult {
     let path = "/etc/ssh/sshd_config";
 
     if !Path::new(path).exists() {
-        return "[!] SSH config not found".to_string();
+        return CheckResult {
+            name: "SSH Root Login".to_string(),
+            risk: RiskLevel::High,
+            message: "SSH config not found".to_string(),
+            score_impact: 20,
+        };
     }
 
     let file = File::open(path);
     if file.is_err() {
-        return "[!] Unable to read SSH config (try running with sudo)".to_string();
+        return CheckResult {
+            name: "SSH Root Login".to_string(),
+            risk: RiskLevel::High,
+            message: "Cannot read SSH config (run as sudo)".to_string(),
+            score_impact: 20,
+        };
     }
 
     let reader = io::BufReader::new(file.unwrap());
@@ -20,7 +45,6 @@ pub fn check_ssh_root_login() -> String {
         if let Ok(content) = line {
             let trimmed = content.trim();
 
-            // Ignore commented lines
             if trimmed.starts_with('#') {
                 continue;
             }
@@ -29,22 +53,44 @@ pub fn check_ssh_root_login() -> String {
                 let parts: Vec<&str> = trimmed.split_whitespace().collect();
                 if parts.len() >= 2 {
                     match parts[1] {
-                        "yes" => return "[!] SSH Root Login Enabled (HIGH RISK)".to_string(),
-                        "no" => return "[✓] SSH Root Login Disabled".to_string(),
-                        "prohibit-password" => {
-                            return "[!] Root login allowed via key (MEDIUM RISK)".to_string()
+                        "yes" => {
+                            return CheckResult {
+                                name: "SSH Root Login".to_string(),
+                                risk: RiskLevel::High,
+                                message: "Root login enabled".to_string(),
+                                score_impact: 25,
+                            }
                         }
-                        _ => return "[?] Unknown SSH root login setting".to_string(),
+                        "no" => {
+                            return CheckResult {
+                                name: "SSH Root Login".to_string(),
+                                risk: RiskLevel::Low,
+                                message: "Root login disabled".to_string(),
+                                score_impact: 0,
+                            }
+                        }
+                        "prohibit-password" => {
+                            return CheckResult {
+                                name: "SSH Root Login".to_string(),
+                                risk: RiskLevel::Medium,
+                                message: "Root login allowed via key".to_string(),
+                                score_impact: 10,
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }
         }
     }
 
-    "[?] PermitRootLogin not explicitly set (check defaults)".to_string()
+    CheckResult {
+        name: "SSH Root Login".to_string(),
+        risk: RiskLevel::Medium,
+        message: "Setting not explicitly defined".to_string(),
+        score_impact: 10,
+    }
 }
-
-
 
 
 pub fn check_ssh_password_auth() -> String {

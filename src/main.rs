@@ -1,14 +1,24 @@
 mod checks;
+mod report;
+
+use checks::*;
+use report::*;
 
 fn main() {
     println!("Linux Guardian - Security Scan\n");
 
-    let ssh_root = checks::check_ssh_root_login();
-    let ssh_password = checks::check_ssh_password_auth();
-    let firewall = checks::check_firewall_status();
+    let mut results = Vec::new();
 
-    println!("{}", ssh_root);
-    println!("{}", ssh_password);
-    println!("{}", firewall);
+    results.push(check_ssh_root_login());
+
+    for result in &results {
+        println!("{}: {}", result.name, result.message);
+    }
+
+    let score = calculate_score(&results);
+    let grade = grade(score);
+
+    println!("\nSecurity Score: {}/100", score);
+    println!("Grade: {}", grade);
 }
 
